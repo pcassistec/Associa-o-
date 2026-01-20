@@ -1,0 +1,5 @@
+{
+  "name": "Associação de Moradores - Praia do Meio",
+  "description": "Sistema de gestão para a Associação dos Moradores da Praia do Meio, permitindo controle de associados, endereços, pagamentos mensais e relatórios financeiros.",
+  "requestFramePermissions": []
+}
