@@ -5,7 +5,18 @@ import {
   PieChart, Pie, Cell, ResponsiveContainer, 
   Legend, Tooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid 
 } from 'recharts';
-import { Download, FileSpreadsheet, Printer, TrendingUp, Info, Activity, User as UserIcon, Clock } from 'lucide-react';
+import { 
+  Download, 
+  FileSpreadsheet, 
+  Printer, 
+  TrendingUp, 
+  Info, 
+  Activity, 
+  User as UserIcon, 
+  Clock,
+  CalendarDays,
+  FileCheck
+} from 'lucide-react';
 
 interface ReportsProps {
   members: Member[];
@@ -14,12 +25,16 @@ interface ReportsProps {
 
 const Reports: React.FC<ReportsProps> = ({ members, payments }) => {
   const currentYear = new Date().getFullYear();
+  const monthsNames = [
+    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+  ];
 
-  // Coleta de dados anuais
+  // Coleta de dados anuais para o gráfico
   const yearlyData = Array.from({ length: 12 }).map((_, i) => {
-    const monthPayments = payments.filter(p => p.month === i && p.year === currentYear);
+    const monthPayments = payments.filter(p => p.month === i && p.year === currentYear && p.status === 'paid');
     return {
-      name: ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'][i],
+      name: monthsNames[i].substring(0, 3),
       total: monthPayments.reduce((acc, curr) => acc + curr.amount, 0),
       count: monthPayments.length
     };
@@ -28,37 +43,102 @@ const Reports: React.FC<ReportsProps> = ({ members, payments }) => {
   const totalCollectedYear = yearlyData.reduce((acc, curr) => acc + curr.total, 0);
   const averageMonthly = totalCollectedYear / 12;
 
-  const COLORS = ['#4f46e5', '#10b981', '#f59e0b', '#3b82f6'];
+  const handlePrintAuditReport = () => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
 
-  const statusData = [
-    { name: 'Ativos', value: members.filter(m => m.active).length },
-    { name: 'Inativos', value: members.filter(m => !m.active).length },
-  ];
+    const activeMembers = members.filter(m => m.active).sort((a, b) => a.name.localeCompare(b.name));
 
-  // Cálculo de produtividade por usuário (Top Operadores)
-  const operatorStats = members.reduce((acc: Record<string, number>, member) => {
-    if (member.createdByName) {
-      acc[member.createdByName] = (acc[member.createdByName] || 0) + 1;
-    }
-    return acc;
-  }, {});
+    const html = `
+      <html>
+        <head>
+          <title>Relatório de Auditoria de Pagamentos - ${currentYear}</title>
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&display=swap');
+            body { font-family: 'Inter', sans-serif; padding: 20px; color: #1e293b; font-size: 10px; }
+            .header { text-align: center; border-bottom: 2px solid #4f46e5; padding-bottom: 15px; margin-bottom: 20px; }
+            .header h1 { margin: 0; color: #1e1b4b; font-size: 18px; text-transform: uppercase; font-weight: 900; }
+            .header p { margin: 2px 0; color: #64748b; font-size: 10px; }
+            .meta-info { display: flex; justify-content: space-between; margin-bottom: 15px; font-weight: bold; font-size: 9px; color: #475569; }
+            table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+            th, td { border: 1px solid #e2e8f0; padding: 6px 2px; text-align: center; overflow: hidden; }
+            th { background: #f8fafc; color: #475569; font-size: 8px; text-transform: uppercase; }
+            th.member-col, td.member-col { text-align: left; padding-left: 8px; width: 180px; white-space: nowrap; text-overflow: ellipsis; }
+            .day-badge { color: #059669; font-weight: 900; display: block; font-size: 10px; }
+            .month-label { font-size: 7px; color: #94a3b8; text-transform: uppercase; margin-top: 2px; display: block; }
+            .pending { color: #cbd5e1; font-size: 14px; }
+            .footer { margin-top: 30px; border-top: 1px solid #e2e8f0; padding-top: 15px; display: flex; justify-content: space-between; font-size: 9px; color: #94a3b8; }
+            @media print {
+              @page { size: landscape; margin: 1cm; }
+              body { padding: 0; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1>Associação dos Moradores da Praia do Meio</h1>
+            <p>Relatório de Auditoria Anual: Consolidação de Recebimentos por Dia</p>
+          </div>
+          
+          <div class="meta-info">
+            <span>Exercício: ${currentYear}</span>
+            <span>Total de Associados: ${activeMembers.length}</span>
+            <span>Data de Emissão: ${new Date().toLocaleString('pt-BR')}</span>
+          </div>
 
-  const topOperators = Object.entries(operatorStats)
-    .sort(([, a], [, b]) => b - a)
-    .slice(0, 5);
+          <table>
+            <thead>
+              <tr>
+                <th class="member-col">Nome do Associado</th>
+                ${monthsNames.map(m => `<th>${m}</th>`).join('')}
+              </tr>
+            </thead>
+            <tbody>
+              ${activeMembers.map(m => `
+                <tr>
+                  <td class="member-col"><strong>${m.name}</strong></td>
+                  ${Array.from({ length: 12 }).map((_, monthIdx) => {
+                    const p = payments.find(pay => pay.memberId === m.id && pay.month === monthIdx && pay.year === currentYear && pay.status === 'paid');
+                    if (!p) return '<td class="pending">-</td>';
+                    
+                    const day = new Date(p.paymentDate + 'T12:00:00').getDate();
+                    return `
+                      <td>
+                        <span class="day-badge">${day.toString().padStart(2, '0')}</span>
+                        <span class="month-label">PAGO</span>
+                      </td>
+                    `;
+                  }).join('')}
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
 
-  // Histórico de alterações recentes
-  const recentActivities = [...members]
-    .sort((a, b) => {
-      const dateA = new Date(a.updatedAt || 0).getTime();
-      const dateB = new Date(b.updatedAt || 0).getTime();
-      return dateB - dateA;
-    })
-    .slice(0, 8);
+          <div class="footer">
+            <div>Documento gerado para fins de auditoria interna e transparência financeira.</div>
+            <div>Assinatura do Tesoureiro: __________________________________________</div>
+          </div>
+
+          <script>window.onload = function() { window.print(); }</script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(html);
+    printWindow.document.close();
+  };
 
   const handlePrintAll = () => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
+
+    const recentActivities = [...members]
+    .sort((a, b) => {
+      const dateA = new Date(a.updatedAt || 0).getTime() || 0;
+      const dateB = new Date(b.updatedAt || 0).getTime() || 0;
+      return dateB - dateA;
+    })
+    .slice(0, 8);
 
     const html = `
       <html>
@@ -94,7 +174,7 @@ const Reports: React.FC<ReportsProps> = ({ members, payments }) => {
             <div class="grid">
               <div class="card">
                 <span>Arrecadação Anual</span>
-                strong>R$ ${totalCollectedYear.toFixed(2)}</strong>
+                <strong>R$ ${totalCollectedYear.toFixed(2)}</strong>
               </div>
               <div class="card">
                 <span>Média Mensal</span>
@@ -163,36 +243,57 @@ const Reports: React.FC<ReportsProps> = ({ members, payments }) => {
     printWindow.document.close();
   };
 
+  const operatorStats = members.reduce((acc: Record<string, number>, member) => {
+    if (member.createdByName) {
+      acc[member.createdByName] = (acc[member.createdByName] || 0) + 1;
+    }
+    return acc;
+  }, {} as Record<string, number>);
+
+  const topOperators = Object.entries(operatorStats)
+    .sort(([, a], [, b]) => (b as number) - (a as number))
+    .slice(0, 5);
+
+  const recentActivities = [...members]
+    .sort((a, b) => {
+      const dateA = new Date(a.updatedAt || 0).getTime() || 0;
+      const dateB = new Date(b.updatedAt || 0).getTime() || 0;
+      return dateB - dateA;
+    })
+    .slice(0, 8);
+
   return (
     <div className="space-y-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-800">Relatórios Estratégicos</h1>
-          <p className="text-slate-500">Análise financeira, demográfica e auditoria de usuários.</p>
+          <p className="text-slate-500">Análise financeira, demográfica e auditoria de pagamentos.</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
+          <button 
+            onClick={handlePrintAuditReport}
+            className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95"
+          >
+            <CalendarDays size={18} />
+            Relatório de Auditoria (Anual com Dias)
+          </button>
           <button 
             onClick={handlePrintAll}
             className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
           >
             <Printer size={16} />
-            Imprimir Relatório Completo
-          </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-sm font-semibold hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-200">
-            <FileSpreadsheet size={16} />
-            Exportar Excel
+            Relatório Gerencial
           </button>
         </div>
       </div>
 
-      {/* Cards de Resumo Financeiro */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
           <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Total Arrecadado ({currentYear})</p>
           <h2 className="text-3xl font-extrabold text-slate-800">R$ {totalCollectedYear.toFixed(2)}</h2>
           <div className="mt-4 flex items-center gap-2 text-emerald-600 text-sm font-bold">
             <TrendingUp size={16} />
-            +15% em relação a {currentYear - 1}
+            Crescimento anual em acompanhamento
           </div>
         </div>
         <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
@@ -210,10 +311,9 @@ const Reports: React.FC<ReportsProps> = ({ members, payments }) => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Gráfico Financeiro */}
         <div className="lg:col-span-2 bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
           <h3 className="text-lg font-bold text-slate-800 mb-8 flex items-center gap-2">
-            <TrendingUp className="text-indigo-600" size={20} /> Arrecadação por Mês
+            <TrendingUp className="text-indigo-600" size={20} /> Arrecadação Mensal Confirmada
           </h3>
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%">
@@ -228,7 +328,6 @@ const Reports: React.FC<ReportsProps> = ({ members, payments }) => {
           </div>
         </div>
 
-        {/* Auditoria: Top Operadores */}
         <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
           <h3 className="text-lg font-bold text-slate-800 mb-8 flex items-center gap-2">
             <UserIcon className="text-sky-600" size={20} /> Cadastros por Usuário
@@ -244,7 +343,7 @@ const Reports: React.FC<ReportsProps> = ({ members, payments }) => {
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="h-2 w-24 bg-slate-100 rounded-full overflow-hidden">
-                    <div className="bg-sky-500 h-full" style={{ width: `${(count / members.length) * 100}%` }}></div>
+                    <div className="bg-sky-500 h-full" style={{ width: `${((count as number) / members.length) * 100}%` }}></div>
                   </div>
                   <span className="text-xs font-black text-slate-400">{count}</span>
                 </div>
@@ -258,31 +357,29 @@ const Reports: React.FC<ReportsProps> = ({ members, payments }) => {
             <div className="flex items-start gap-3">
                <Info className="text-sky-500 shrink-0" size={18} />
                <p className="text-xs text-sky-800 leading-relaxed font-medium">
-                 Este relatório contabiliza quem realizou o <strong>cadastro inicial</strong> dos moradores no sistema.
+                 Relatório baseado em <strong>registros iniciais</strong>. Use o Relatório de Auditoria no topo para detalhes de pagamentos.
                </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Log de Atividades Recentes */}
       <div className="bg-slate-900 rounded-3xl overflow-hidden shadow-xl border border-slate-800">
         <div className="p-6 border-b border-slate-800 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-indigo-500 text-white rounded-xl">
               <Activity size={20} />
             </div>
-            <h3 className="font-bold text-white text-lg">Log de Atividades Recentes</h3>
+            <h3 className="font-bold text-white text-lg">Log de Auditoria de Cadastros</h3>
           </div>
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest bg-slate-800 px-3 py-1 rounded-full">Auditoria em Tempo Real</span>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
               <tr className="bg-slate-800/50 text-slate-400">
                 <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest">Associado</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest">Ação / Operador</th>
-                <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest">Endereço Registrado</th>
+                <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest">Operador Responsável</th>
+                <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest">Última Edição</th>
                 <th className="px-6 py-4 text-xs font-bold uppercase tracking-widest text-right">Data/Hora</th>
               </tr>
             </thead>
@@ -298,14 +395,11 @@ const Reports: React.FC<ReportsProps> = ({ members, payments }) => {
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    <div className="flex flex-col">
-                      <span className="text-xs font-bold text-indigo-400 uppercase tracking-tighter">Alterado por:</span>
-                      <span className="text-sm text-slate-300 font-medium">{member.updatedByName || member.createdByName}</span>
-                    </div>
+                    <span className="text-sm text-slate-300 font-medium">{member.createdByName}</span>
                   </td>
                   <td className="px-6 py-4">
-                    <span className="text-xs text-slate-400 italic block max-w-[200px] truncate">
-                      {member.address.street}, {member.address.number}
+                    <span className="text-xs text-slate-400 italic">
+                      {member.updatedByName || 'Sem edições'}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right">
@@ -316,18 +410,8 @@ const Reports: React.FC<ReportsProps> = ({ members, payments }) => {
                   </td>
                 </tr>
               ))}
-              {recentActivities.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="px-6 py-12 text-center text-slate-500 italic">
-                    Nenhuma atividade de auditoria registrada até o momento.
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
-        </div>
-        <div className="p-4 bg-slate-800/30 text-center">
-          <button className="text-xs font-bold text-indigo-400 hover:text-indigo-300 transition-colors uppercase tracking-widest">Ver Histórico Completo</button>
         </div>
       </div>
     </div>

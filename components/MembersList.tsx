@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Search, UserPlus, Filter, MoreHorizontal, Edit, Trash2, MapPin, Phone, Mail, Calendar, Home, AlertTriangle, Lock, X, History, User as UserIcon } from 'lucide-react';
+import { Search, UserPlus, Filter, MoreHorizontal, Edit, Trash2, MapPin, Phone, Mail, Calendar, Home, AlertTriangle, Lock, X, History, User as UserIcon, CheckCircle, XCircle } from 'lucide-react';
 import { Member, Address, User } from '../types';
 
 interface MembersListProps {
@@ -11,6 +11,7 @@ interface MembersListProps {
 
 const MembersList: React.FC<MembersListProps> = ({ members, onSave, currentUser }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
   
@@ -27,6 +28,7 @@ const MembersList: React.FC<MembersListProps> = ({ members, onSave, currentUser 
     email: '',
     phone: '',
     birthDate: '',
+    active: true,
     street: '',
     number: '',
     complement: '',
@@ -34,10 +36,14 @@ const MembersList: React.FC<MembersListProps> = ({ members, onSave, currentUser 
     zipCode: '59010-000'
   });
 
-  const filteredMembers = members.filter(m => 
-    m.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    m.cpf.includes(searchTerm)
-  );
+  const filteredMembers = members.filter(m => {
+    const matchesSearch = m.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                          m.cpf.includes(searchTerm);
+    const matchesStatus = statusFilter === 'all' || 
+                          (statusFilter === 'active' && m.active) || 
+                          (statusFilter === 'inactive' && !m.active);
+    return matchesSearch && matchesStatus;
+  });
 
   const handleOpenModal = (member?: Member) => {
     if (isViewer) return;
@@ -49,6 +55,7 @@ const MembersList: React.FC<MembersListProps> = ({ members, onSave, currentUser 
         email: member.email,
         phone: member.phone,
         birthDate: member.birthDate || '',
+        active: member.active,
         street: member.address.street,
         number: member.address.number,
         complement: member.address.complement || '',
@@ -58,7 +65,7 @@ const MembersList: React.FC<MembersListProps> = ({ members, onSave, currentUser 
     } else {
       setEditingMember(null);
       setFormData({
-        name: '', cpf: '', email: '', phone: '', birthDate: '',
+        name: '', cpf: '', email: '', phone: '', birthDate: '', active: true,
         street: '', number: '', complement: '', 
         neighborhood: 'Praia do Meio', zipCode: '59010-000'
       });
@@ -107,6 +114,7 @@ const MembersList: React.FC<MembersListProps> = ({ members, onSave, currentUser 
         email: formData.email,
         phone: formData.phone,
         birthDate: formData.birthDate,
+        active: formData.active,
         address,
         updatedById: currentUser.id,
         updatedByName: currentUser.name,
@@ -122,7 +130,7 @@ const MembersList: React.FC<MembersListProps> = ({ members, onSave, currentUser 
         phone: formData.phone,
         birthDate: formData.birthDate,
         joinDate: new Date().toLocaleDateString('pt-BR'),
-        active: true,
+        active: formData.active,
         address,
         createdById: currentUser.id,
         createdByName: currentUser.name,
@@ -153,26 +161,41 @@ const MembersList: React.FC<MembersListProps> = ({ members, onSave, currentUser 
         )}
       </div>
 
-      <div className="relative">
-        <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
-          <Search size={20} />
+      <div className="flex flex-col md:flex-row gap-4">
+        <div className="relative flex-1">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+            <Search size={20} />
+          </div>
+          <input
+            type="text"
+            placeholder="Buscar por nome ou CPF..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="block w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm"
+          />
         </div>
-        <input
-          type="text"
-          placeholder="Buscar por nome ou CPF..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="block w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all shadow-sm"
-        />
+        
+        <div className="flex items-center gap-2 bg-white px-4 py-2 border border-slate-200 rounded-2xl shadow-sm">
+          <Filter size={18} className="text-slate-400" />
+          <select 
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as any)}
+            className="bg-transparent border-none outline-none text-sm font-bold text-slate-600 cursor-pointer pr-2"
+          >
+            <option value="all">Todos os Status</option>
+            <option value="active">Apenas Ativos</option>
+            <option value="inactive">Apenas Inativos</option>
+          </select>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
         {filteredMembers.map((member) => (
-          <div key={member.id} className="bg-white rounded-2xl border border-slate-100 shadow-sm hover:shadow-md transition-all group flex flex-col">
+          <div key={member.id} className={`bg-white rounded-2xl border ${member.active ? 'border-slate-100' : 'border-red-100 bg-red-50/10'} shadow-sm hover:shadow-md transition-all group flex flex-col`}>
             <div className="p-6 flex-1">
               <div className="flex items-start justify-between mb-6">
                 <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 rounded-2xl bg-indigo-50 flex items-center justify-center text-indigo-600 font-bold text-xl">
+                  <div className={`w-14 h-14 rounded-2xl ${member.active ? 'bg-indigo-50 text-indigo-600' : 'bg-slate-100 text-slate-400'} flex items-center justify-center font-bold text-xl`}>
                     {member.name.charAt(0)}
                   </div>
                   <div>
@@ -215,16 +238,16 @@ const MembersList: React.FC<MembersListProps> = ({ members, onSave, currentUser 
               </div>
             </div>
             
-            <div className="px-6 py-4 bg-slate-50/50 border-t border-slate-100 rounded-b-2xl">
+            <div className={`px-6 py-4 ${member.active ? 'bg-slate-50/50 border-slate-100' : 'bg-red-50/30 border-red-100'} border-t rounded-b-2xl`}>
               <div className="flex items-center justify-between mb-3">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Membro desde {member.joinDate}</span>
-                <div className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${member.active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}`}>
+                <div className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider ${member.active ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
                   {member.active ? 'Ativo' : 'Inativo'}
                 </div>
               </div>
               
               {member.createdByName && (
-                <div className="space-y-1 pt-2 border-t border-slate-100">
+                <div className={`space-y-1 pt-2 border-t ${member.active ? 'border-slate-100' : 'border-red-100'}`}>
                   <div className="flex items-center gap-2 text-[10px] text-slate-400">
                     <UserIcon size={10} className="text-slate-300" />
                     <span>Cadastrado por: <strong className="text-slate-500">{member.createdByName}</strong></span>
@@ -242,7 +265,6 @@ const MembersList: React.FC<MembersListProps> = ({ members, onSave, currentUser 
         ))}
       </div>
 
-      {/* Modais omitidos por brevidade mas mantidos iguais à versão anterior */}
       {isDeleteModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/80 backdrop-blur-md" onClick={() => setIsDeleteModalOpen(false)}></div>
@@ -317,7 +339,22 @@ const MembersList: React.FC<MembersListProps> = ({ members, onSave, currentUser 
               </div>
               <form onSubmit={handleSubmit} className="space-y-6">
                 <div className="space-y-4">
-                  <h3 className="text-sm font-bold text-indigo-600 uppercase tracking-widest border-b border-indigo-50 pb-2">Dados Pessoais</h3>
+                  <div className="flex items-center justify-between border-b border-indigo-50 pb-2">
+                    <h3 className="text-sm font-bold text-indigo-600 uppercase tracking-widest">Dados Pessoais</h3>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase">Status:</span>
+                      <button 
+                        type="button"
+                        onClick={() => setFormData({...formData, active: !formData.active})}
+                        className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black transition-all ${
+                          formData.active ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-red-50 text-red-600 border border-red-100'
+                        }`}
+                      >
+                        {formData.active ? <CheckCircle size={12} /> : <XCircle size={12} />}
+                        {formData.active ? 'ATIVO' : 'INATIVO'}
+                      </button>
+                    </div>
+                  </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-2">
                       <label className="text-sm font-bold text-slate-700">Nome Completo</label>

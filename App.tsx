@@ -11,9 +11,11 @@ import {
   X,
   Palmtree,
   MapPin,
-  ShieldCheck
+  ShieldCheck,
+  Wallet,
+  ArrowLeftRight
 } from 'lucide-react';
-import { User, AppView, Member, Payment } from './types';
+import { User, AppView, Member, Payment, Expense } from './types';
 import Login from './components/Login';
 import Dashboard from './components/Dashboard';
 import MembersList from './components/MembersList';
@@ -22,6 +24,8 @@ import PaymentsManager from './components/PaymentsManager';
 import Reports from './components/Reports';
 import SettingsView from './components/SettingsView';
 import UserManagement from './components/UserManagement';
+import FinancePanel from './components/FinancePanel';
+import CashFlowManager from './components/CashFlowManager';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -29,38 +33,30 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [members, setMembers] = useState<Member[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [systemUsers, setSystemUsers] = useState<User[]>([]);
 
   useEffect(() => {
     const savedUser = localStorage.getItem('ampm_auth');
-    if (savedUser) {
-      setCurrentUser(JSON.parse(savedUser));
-    }
+    if (savedUser) setCurrentUser(JSON.parse(savedUser));
 
     const savedSystemUsers = localStorage.getItem('ampm_users');
     if (savedSystemUsers) {
       setSystemUsers(JSON.parse(savedSystemUsers));
     } else {
-      const initialAdmin: User = { 
-        id: 'admin', 
-        username: 'admin', 
-        password: '123456', 
-        name: 'Administrador Geral', 
-        role: 'admin' 
-      };
+      const initialAdmin: User = { id: 'admin', username: 'admin', password: '123456', name: 'Administrador Geral', role: 'admin' };
       setSystemUsers([initialAdmin]);
       localStorage.setItem('ampm_users', JSON.stringify([initialAdmin]));
     }
 
     const savedMembers = localStorage.getItem('ampm_members');
-    if (savedMembers) {
-      setMembers(JSON.parse(savedMembers));
-    }
+    if (savedMembers) setMembers(JSON.parse(savedMembers));
 
     const savedPayments = localStorage.getItem('ampm_payments');
-    if (savedPayments) {
-      setPayments(JSON.parse(savedPayments));
-    }
+    if (savedPayments) setPayments(JSON.parse(savedPayments));
+
+    const savedExpenses = localStorage.getItem('ampm_expenses');
+    if (savedExpenses) setExpenses(JSON.parse(savedExpenses));
   }, []);
 
   const saveMembers = (updatedMembers: Member[]) => {
@@ -73,10 +69,14 @@ const App: React.FC = () => {
     localStorage.setItem('ampm_payments', JSON.stringify(updatedPayments));
   };
 
+  const saveExpenses = (updatedExpenses: Expense[]) => {
+    setExpenses(updatedExpenses);
+    localStorage.setItem('ampm_expenses', JSON.stringify(updatedExpenses));
+  };
+
   const saveSystemUsers = (updatedUsers: User[]) => {
     setSystemUsers(updatedUsers);
     localStorage.setItem('ampm_users', JSON.stringify(updatedUsers));
-    // Se o usuário atual foi editado, atualiza a sessão
     const updatedMe = updatedUsers.find(u => u.id === currentUser?.id);
     if (updatedMe) {
       setCurrentUser(updatedMe);
@@ -100,9 +100,7 @@ const App: React.FC = () => {
     saveSystemUsers(updatedUsers);
   };
 
-  if (!currentUser) {
-    return <Login onLogin={handleLogin} />;
-  }
+  if (!currentUser) return <Login onLogin={handleLogin} />;
 
   const renderContent = () => {
     switch (activeView) {
@@ -114,6 +112,10 @@ const App: React.FC = () => {
         return <AddressesView members={members} />;
       case 'payments':
         return <PaymentsManager members={members} payments={payments} onSave={savePayments} currentUser={currentUser} />;
+      case 'finance':
+        return <FinancePanel members={members} payments={payments} expenses={expenses} currentUser={currentUser} />;
+      case 'cashflow':
+        return <CashFlowManager payments={payments} members={members} expenses={expenses} onSaveExpenses={saveExpenses} currentUser={currentUser} />;
       case 'reports':
         return <Reports members={members} payments={payments} />;
       case 'users':
@@ -129,7 +131,9 @@ const App: React.FC = () => {
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'members', label: 'Associados', icon: Users },
     { id: 'addresses', label: 'Endereços', icon: MapPin },
-    { id: 'payments', label: 'Pagamentos', icon: CreditCard },
+    { id: 'payments', label: 'Lançamentos', icon: CreditCard },
+    { id: 'cashflow', label: 'Livro Caixa', icon: ArrowLeftRight },
+    { id: 'finance', label: 'Painel Financeiro', icon: Wallet },
     { id: 'reports', label: 'Relatórios', icon: FileText },
     ...(currentUser.role === 'admin' ? [{ id: 'users', label: 'Usuários', icon: ShieldCheck }] : []),
     { id: 'settings', label: 'Configurações', icon: Settings },
@@ -146,11 +150,7 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen flex bg-slate-50">
-      <aside className={`
-        fixed inset-y-0 left-0 z-50 w-64 bg-indigo-900 text-white transition-transform duration-300 transform 
-        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} 
-        lg:translate-x-0 lg:static lg:inset-0
-      `}>
+      <aside className={`fixed inset-y-0 left-0 z-50 w-64 bg-indigo-900 text-white transition-transform duration-300 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 lg:static lg:inset-0`}>
         <div className="flex flex-col h-full">
           <div className="p-6 flex items-center gap-3">
             <div className="bg-white/20 p-2 rounded-lg">
@@ -163,18 +163,7 @@ const App: React.FC = () => {
           </div>
           <nav className="flex-1 px-4 py-4 space-y-1">
             {navItems.map((item) => (
-              <button
-                key={item.id}
-                onClick={() => {
-                  setActiveView(item.id as AppView);
-                  setIsSidebarOpen(false);
-                }}
-                className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
-                  activeView === item.id 
-                  ? 'bg-indigo-700 text-white shadow-lg' 
-                  : 'text-indigo-200 hover:bg-indigo-800 hover:text-white'
-                }`}
-              >
+              <button key={item.id} onClick={() => { setActiveView(item.id as AppView); setIsSidebarOpen(false); }} className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${activeView === item.id ? 'bg-indigo-700 text-white shadow-lg' : 'text-indigo-200 hover:bg-indigo-800 hover:text-white'}`}>
                 <item.icon size={20} />
                 <span className="font-medium">{item.label}</span>
               </button>
@@ -190,10 +179,7 @@ const App: React.FC = () => {
                 <p className="text-xs text-indigo-300 truncate">{getRoleLabel(currentUser.role)}</p>
               </div>
             </div>
-            <button
-              onClick={handleLogout}
-              className="w-full flex items-center gap-3 px-4 py-3 text-indigo-200 hover:bg-red-500/20 hover:text-red-300 rounded-lg transition-colors"
-            >
+            <button onClick={handleLogout} className="w-full flex items-center gap-3 px-4 py-3 text-indigo-200 hover:bg-red-500/20 hover:text-red-300 rounded-lg transition-colors">
               <LogOut size={20} />
               <span className="font-medium">Sair do Sistema</span>
             </button>
@@ -202,10 +188,7 @@ const App: React.FC = () => {
       </aside>
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         <header className="bg-white border-b border-slate-200 h-16 flex items-center justify-between px-6 sticky top-0 z-40">
-          <button 
-            className="lg:hidden text-slate-600 p-2 hover:bg-slate-100 rounded-lg"
-            onClick={() => setIsSidebarOpen(true)}
-          >
+          <button className="lg:hidden text-slate-600 p-2 hover:bg-slate-100 rounded-lg" onClick={() => setIsSidebarOpen(true)}>
             <Menu size={24} />
           </button>
           <h2 className="text-lg font-semibold text-slate-800 hidden lg:block">
@@ -218,17 +201,10 @@ const App: React.FC = () => {
           </div>
         </header>
         <main className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-7xl mx-auto">
-            {renderContent()}
-          </div>
+          <div className="max-w-7xl mx-auto">{renderContent()}</div>
         </main>
       </div>
-      {isSidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-slate-900/50 z-40 lg:hidden backdrop-blur-sm"
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      )}
+      {isSidebarOpen && <div className="fixed inset-0 bg-slate-900/50 z-40 lg:hidden backdrop-blur-sm" onClick={() => setIsSidebarOpen(false)} />}
     </div>
   );
 };

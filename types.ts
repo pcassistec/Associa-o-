@@ -25,6 +25,8 @@ export interface Member {
   updatedAt?: string;
 }
 
+export type PaymentMethod = 'Pix' | 'Dinheiro' | 'Cartão de Débito' | 'Cartão de Crédito' | 'Transferência' | 'Outro';
+
 export interface Payment {
   id: string;
   memberId: string;
@@ -33,6 +35,19 @@ export interface Payment {
   amount: number;
   paymentDate: string;
   status: 'paid' | 'pending';
+  paymentMethod?: PaymentMethod;
+  createdByName?: string; // Quem registrou o pagamento
+}
+
+export interface Expense {
+  id: string;
+  category: 'Manutenção' | 'Utilidades' | 'Administrativo' | 'Eventos' | 'Outros';
+  description: string;
+  amount: number;
+  date: string;
+  paymentMethod?: PaymentMethod;
+  createdByName: string;
+  createdAt: string;
 }
 
 export type UserRole = 'admin' | 'editor' | 'viewer';
@@ -45,4 +60,4 @@ export interface User {
   role: UserRole;
 }
 
-export type AppView = 'dashboard' | 'members' | 'addresses' | 'payments' | 'reports' | 'users' | 'settings';
+export type AppView = 'dashboard' | 'members' | 'addresses' | 'payments' | 'reports' | 'users' | 'settings' | 'finance' | 'cashflow';
